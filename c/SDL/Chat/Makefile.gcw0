@@ -1,0 +1,9 @@
+CC:=mipsel-linux-cc
+SYSROOT=$(shell $(CC) --print-sysroot)
+CFLAGS:= -Wall -std=c11
+LIBS:= $(shell $(SYSROOT)/usr/bin/sdl-config --libs) $(shell $(SYSROOT)/usr/bin/sdl-config --cflags) -lSDL_net
+
+
+all:
+	$(CC) host.c util.c -o host $(CFLAGS) $(LIBS) && \
+	$(CC) join.c util.c -o join $(CFLAGS) $(LIBS)

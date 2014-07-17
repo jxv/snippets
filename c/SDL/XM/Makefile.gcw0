@@ -1,0 +1,29 @@
+P=/opt/gcw0-toolchain/usr/mipsel-gcw0-linux-uclibc/sysroot/usr/bin/
+
+CC=mipsel-gcw0-linux-uclibc-cc
+RM=rm
+
+INC=-I .
+
+SRC=$(wildcard *.c)
+
+CFLAG=-ansi
+CFLAG+=-Werror
+CFLAG+=-Wall
+CFLAG+=-pedantic
+CFLAG+=-O3
+CFLAG+=-DDEBUG
+CFLAG+=`$(P)sdl-config --cflags`
+
+LIB=-lc
+LIB+=-lm
+LIB+=-lpthread
+LIB+=`$(P)sdl-config --libs`
+LIB+=-lSDL_mixer
+
+OUT=xmplayer
+
+all:
+	$(CC) $(SRC) -o $(OUT) $(CFLAG) $(INC) $(LIB)  
+clean:
+	$(RM) $(OUT)
