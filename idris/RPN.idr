@@ -20,13 +20,13 @@ toFun : Op -> Float -> Float -> Float
 toFun op = case op of Add => (+); Sub => (-); Mul => (*); Div => (/)
 
 eval : List Value -> List Float -> Either String Float
-eval Nil Nil = Left "Bad input."
+eval Nil Nil = Left "No input."
 eval Nil (n::Nil) = Right n
 eval Nil (_::_::_) = Left "Not enough operations."
-eval ((Number n)::vs) ns = eval vs (n::ns)
-eval ((Operator op)::vs) (n::m::ns) = eval vs ((toFun op m n)::ns)
-eval ((Operator op)::_) (_::Nil) = Left "Not enough stacked numbers."
 eval ((Operator op)::_) Nil = Left "No stacked numbers."
+eval ((Operator op)::_) (_::Nil) = Left "Not enough stacked numbers."
+eval ((Operator op)::vs) (n::m::ns) = eval vs ((toFun op m n)::ns)
+eval ((Number n)::vs) ns = eval vs (n::ns)
 
 main : IO ()
 main = do (_::input) <- System.getArgs
