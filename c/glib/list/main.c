@@ -19,7 +19,7 @@ int main(int argc, const char **argv)
 
 	g_list_foreach(list, print_node, NULL);
 
-	g_list_free_1(list);
+	g_list_free(list);
 
 	return EXIT_SUCCESS;
 }
