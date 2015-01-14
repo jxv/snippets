@@ -1,9 +1,12 @@
-#![feature(tuple_indexing)]
+extern crate core;
 
 use std::rand::{random};
+use core::cmp::Ordering::*;
+use Rank::*;
+use Suit::*;
+use Hand::*;
 
-
-#[deriving(Show, PartialEq, PartialOrd, Eq, Ord, Rand, Clone)]
+#[derive(Show, PartialEq, PartialOrd, Eq, Ord, Rand, Clone, Copy)]
 pub enum Rank {
     R2,
     R3,
@@ -21,7 +24,7 @@ pub enum Rank {
 }
 
 impl Rank {
-    fn value(&self) -> uint {
+    fn value(&self) -> usize {
         match *self {
             R2 => 2, R3 => 3, R4 => 4, R5 => 5, R6 => 6, R7 => 7, R8 => 8, R9 => 9, R10 => 10,
             Jack => 11, Queen => 12, King => 13, Ace => 14
@@ -30,7 +33,7 @@ impl Rank {
 }
 
 
-#[deriving(Show, PartialEq, PartialOrd, Eq, Ord, Rand, Clone)]
+#[derive(Show, PartialEq, PartialOrd, Eq, Ord, Rand, Clone, Copy)]
 pub enum Suit {
     Clubs,
     Hearts,
@@ -39,14 +42,14 @@ pub enum Suit {
 }
 
 
-#[deriving(Show, PartialEq, PartialOrd, Eq, Ord, Rand, Clone)]
+#[derive(Show, PartialEq, PartialOrd, Eq, Ord, Rand, Clone, Copy)]
 pub struct Card {
     pub rank: Rank,
     pub suit: Suit,
 }
 
 
-#[deriving(Show, PartialEq, PartialOrd, Eq, Ord, Rand, Clone)]
+#[derive(Show, PartialEq, PartialOrd, Eq, Ord, Rand, Clone, Copy)]
 pub enum Hand {
     High((Rank, Rank, Rank, Rank, Rank)),
     Pair1((Rank, Rank, Rank, Rank)),
@@ -60,7 +63,7 @@ pub enum Hand {
 }
 
 
-#[deriving(Show, PartialEq, PartialOrd, Eq, Ord, Clone)]
+#[derive(Show, PartialEq, PartialOrd, Eq, Ord, Clone, Copy)]
 pub struct Table {
     pub flop: (Card, Card, Card),
     pub turn: Card,
@@ -68,48 +71,49 @@ pub struct Table {
 }
 
 
-pub type PHand = [Card, ..2];
-pub type HandSet = [Card, ..5];
+pub type PHand = [Card;2];
+pub type HandSet = [Card;5];
 
 
-pub fn deal() -> (Table, [PHand, ..9]) {
+fn deck_idxer(deck_idx: &[(usize, usize);52], i: usize) -> Card {
     // The range of constants.
-    let suits: [Suit, ..4] = [Suit::Clubs, Suit::Hearts, Suit::Diamonds, Suit::Spades];
-    let ranks: [Rank, ..13] = [R2, R3, R4, R5, R6, R7, R8, R9, R10, Jack, Queen, King, Ace];
+    let suits: [Suit;4] = [Clubs, Hearts, Diamonds, Spades];
+    let ranks: [Rank;13] = [R2, R3, R4, R5, R6, R7, R8, R9, R10, Jack, Queen, King, Ace];
+
+    let j = deck_idx[i].1;
+    Card {
+        rank: ranks[j % 13],
+        suit: suits[j / 13],
+    }
+}
+
+pub fn deal() -> (Table, [PHand;9]) {
     // Shuffle indices over an ordered deck.
-    let mut deck_idx = [(0u,0u), ..52];
-    for i in range(0u, 52u) {
+    let mut deck_idx = [(0,0);52];
+    for i in 0..52 {
         deck_idx[i] = (random(), i);
     }
     deck_idx.sort();
-    // Indexing function for clarity.
-    let idx = |i: uint| {
-        let j = deck_idx[i].1;
-        Card {
-            rank: ranks[j % 13],
-            suit: suits[j / 13],
-        }
-    };
     // Fill up table, end with 4 offset.
     let table = Table {
-            flop: (idx(0), idx(1), idx(2)),
-            river: idx(3),
-            turn: idx(4),
+            flop: (deck_idxer(&deck_idx, 0), deck_idxer(&deck_idx, 1), deck_idxer(&deck_idx, 2)),
+            river: deck_idxer(&deck_idx, 3),
+            turn: deck_idxer(&deck_idx, 4),
     };
     // Fill up player hands, start with 5 offset.
-    let mut phands = [[Card { rank: R2, suit: Clubs }, ..2], ..9]; // Init with junk card values.
-    for i in range(0u, 9u) {
+    let mut phands = [[Card { rank: R2, suit: Clubs };2];9]; // Init with junk card values.
+    for i in 0..9 {
         let ofs = 5 + i * 2;
-        phands[i] = [idx(ofs), idx(ofs + 1)]; 
+        phands[i] = [deck_idxer(&deck_idx, ofs), deck_idxer(&deck_idx, ofs + 1)]; 
     }
     (table, phands)
 }
 
 
-fn best_hand_aux_s_flush(cards: &[Card, ..7]) -> Option<(Hand, HandSet)> {
+fn best_hand_aux_s_flush(cards: &[Card;7]) -> Option<(Hand, HandSet)> {
     // Resort by suit then by ranks.
     let cards = {
-        let mut cards = *cards.clone();
+        let mut cards = cards.clone();
         cards.sort_by(|a,b|
             match b.suit.cmp(&a.suit) {
                 Less => Less,
@@ -119,23 +123,24 @@ fn best_hand_aux_s_flush(cards: &[Card, ..7]) -> Option<(Hand, HandSet)> {
         );
         cards
     };
+
     // Find boundaries for at least five similar suits.
-    let bounds = || {
-        for i in range(0u, cards.len() - 4) {
+    { 
+        let mut boundaries = None;
+    	for i in 0..(cards.len() - 4) {
             let mut same_suit = 0;
-            for j in range(i + 1, cards.len()) {
+            for j in (i + 1)..cards.len() {
                 if cards[i].suit == cards[j].suit {
                     same_suit += 1;
                 }
             }
             if same_suit >= 4 {
-                return Some((i, i + same_suit));
+                boundaries = Some((i, i + same_suit));
+                break;
             }
         }
-        None
-    };
-    bounds()
-    .and_then(|(start, end)|
+        boundaries
+    }.and_then(|(start, end)|
         best_hand_aux_straight_n(&cards, start, end)
         .or_else(|| best_hand_aux_straight_n_low(&cards, start, end))
         .map(|(rank, hand_set)| (SFlush(rank), hand_set)))
@@ -143,10 +148,10 @@ fn best_hand_aux_s_flush(cards: &[Card, ..7]) -> Option<(Hand, HandSet)> {
 
 
 // Pre-cond: descendingly sorted cards.
-fn best_hand_aux_kind_4(cs: &[Card, ..7]) -> Option<(Hand, HandSet)> {
+fn best_hand_aux_kind_4(cs: &[Card;7]) -> Option<(Hand, HandSet)> {
     // Find four consecutive similar ranks.
     let mut j = None;
-    for i in range(0u, cs.len() - 3) {
+    for i in 0..(cs.len() - 3) {
         if cs[i].rank == cs[i + 1].rank && cs[i].rank == cs[i + 2].rank {
             j = Some(i);
             break;
@@ -158,8 +163,8 @@ fn best_hand_aux_kind_4(cs: &[Card, ..7]) -> Option<(Hand, HandSet)> {
         None => return None
     };
     // Kicker's index.
-    let mut k = 0u;
-    for i in range(0u, cs.len()) {
+    let mut k = 0;
+    for i in 0..cs.len() {
         if i == j || i == j + 1 || i == j + 2 || i == j + 3{
             continue;
         }
@@ -173,10 +178,10 @@ fn best_hand_aux_kind_4(cs: &[Card, ..7]) -> Option<(Hand, HandSet)> {
 
 
 // Pre-cond: descendingly sorted cards.
-fn best_hand_aux_f_house(cs: &[Card, ..7]) -> Option<(Hand, HandSet)> {
+fn best_hand_aux_f_house(cs: &[Card;7]) -> Option<(Hand, HandSet)> {
     // Find three consecutive similar ranks.
     let mut j = None;
-    for i in range(0u, cs.len() - 2) {
+    for i in 0..(cs.len() - 2) {
         if cs[i].rank == cs[i + 1].rank && cs[i].rank == cs[i + 2].rank {
             j = Some(i);
             break;
@@ -189,7 +194,7 @@ fn best_hand_aux_f_house(cs: &[Card, ..7]) -> Option<(Hand, HandSet)> {
     };
     // Find two consecutive similar ranks.
     let mut k = None;
-    for i in range(0u, cs.len() - 1) {
+    for i in 0..(cs.len() - 1) {
         if i < j && i > j + 2 && cs[i].rank == cs[i + 1].rank {
             k = Some(i);
             break;
@@ -206,9 +211,9 @@ fn best_hand_aux_f_house(cs: &[Card, ..7]) -> Option<(Hand, HandSet)> {
 }
 
 
-fn best_hand_aux_flush(cards: &[Card, ..7]) -> Option<(Hand, HandSet)> {
+fn best_hand_aux_flush(cards: &[Card;7]) -> Option<(Hand, HandSet)> {
     // Resort by suit then by ranks.
-    let mut cs: [Card, ..7] = *cards.clone();
+    let mut cs: [Card;7] = cards.clone();
     cs.sort_by(|a,b| match b.suit.cmp(&a.suit) {
             Less => Less,
             Greater => Greater,
@@ -216,7 +221,7 @@ fn best_hand_aux_flush(cards: &[Card, ..7]) -> Option<(Hand, HandSet)> {
         }
     );
     let mut j = None;
-    for i in range(0u, cs.len() - 4) {
+    for i in 0..(cs.len() - 4) {
         if cs[i].suit == cs[i + 1].suit &&
                     cs[i].suit == cs[i + 2].suit &&
                     cs[i].suit == cs[i + 3].suit &&
@@ -236,10 +241,10 @@ fn best_hand_aux_flush(cards: &[Card, ..7]) -> Option<(Hand, HandSet)> {
 }
 
 
-fn best_hand_aux_straight_n_low(cs: &[Card, ..7], start: uint, end: uint)
+fn best_hand_aux_straight_n_low(cs: &[Card;7], start: usize, end: usize)
         -> Option<(Rank, HandSet)> {
-    let mut idxs: [Option<uint>, ..5] = [None, ..5];
-    for i in range(start, end) {
+    let mut idxs: [Option<usize>;5] = [None;5];
+    for i in range(start,end) {
         match cs[i].rank {
             R5 => { idxs[0] = Some(i); },
             R4 => { idxs[1] = Some(i); },
@@ -255,7 +260,6 @@ fn best_hand_aux_straight_n_low(cs: &[Card, ..7], start: uint, end: uint)
         if filled {
             break;
         }
-
     }
     idxs[0].and_then(|r5|
     idxs[1].and_then(|r4|
@@ -267,13 +271,13 @@ fn best_hand_aux_straight_n_low(cs: &[Card, ..7], start: uint, end: uint)
 
 
 // Pre-cond: descendingly sorted cards.
-fn best_hand_aux_straight_n(cs: &[Card, ..7], start: uint, end: uint) -> Option<(Rank, HandSet)> {
+fn best_hand_aux_straight_n(cs: &[Card;7], start: usize, end: usize) -> Option<(Rank, HandSet)> {
     // Scan for five consecutively descending ranks. And skip equal ranks!
-    let mut idxs: [uint, ..5] = [0u, ..5];
+    let mut idxs: [usize;5] = [0;5];
     let mut ofs = 0;
-    for i in range(start, end - 4) {
+    for i in start..(end - 4) {
         ofs = 0;
-        for j in range(i, end - 1) {
+        for j in i..(end - 1) {
             let is_eq = cs[j].rank == cs[j + 1].rank;
             let is_succ = cs[j].rank.value() == cs[j + 1].rank.value() + 1;
             match (is_eq, is_succ) {
@@ -304,17 +308,17 @@ fn best_hand_aux_straight_n(cs: &[Card, ..7], start: uint, end: uint) -> Option<
 
 
 // Pre-cond: descendingly sorted cards.
-fn best_hand_aux_straight(cs: &[Card, ..7]) -> Option<(Hand, HandSet)> {
+fn best_hand_aux_straight(cs: &[Card;7]) -> Option<(Hand, HandSet)> {
     best_hand_aux_straight_n(cs, 0, 7).or_else(|| best_hand_aux_straight_n_low(cs, 0, 7))
         .map(|(rank, hand_set)| (Straight(rank), hand_set))
 }
 
 
 // Pre-cond: descendingly sorted cards.
-fn best_hand_aux_kind_3(cs: &[Card, ..7]) -> Option<(Hand, HandSet)> {
+fn best_hand_aux_kind_3(cs: &[Card;7]) -> Option<(Hand, HandSet)> {
     // Find three consecutive similar ranks.
     let mut j = None;
-    for i in range(0u, cs.len() - 2) {
+    for i in 0..(cs.len() - 2) {
         if cs[i].rank == cs[i + 1].rank && cs[i].rank == cs[i + 2].rank {
             j = Some(i);
             break;
@@ -326,9 +330,9 @@ fn best_hand_aux_kind_3(cs: &[Card, ..7]) -> Option<(Hand, HandSet)> {
         None => return None
     };
     // Kickers' indices.
-    let mut k = [0u, ..2];
-    let mut m = 0u;
-    for i in range(0u, cs.len()) {
+    let mut k = [0;2];
+    let mut m = 0;
+    for i in 0..cs.len() {
         if i == j || i == j + 1 || i == j + 2 {
             continue;
         }
@@ -345,11 +349,11 @@ fn best_hand_aux_kind_3(cs: &[Card, ..7]) -> Option<(Hand, HandSet)> {
 
 
 // Pre-cond: descendingly sorted cards.
-fn best_hand_aux_pair_2(cs: &[Card, ..7]) -> Option<(Hand, HandSet)> {
+fn best_hand_aux_pair_2(cs: &[Card;7]) -> Option<(Hand, HandSet)> {
     // Find a pair of two consecutive similar ranks.
     let mut j = None;
     let mut k = None;
-    for i in range(0u, cs.len() - 1) {
+    for i in 0..(cs.len() - 1) {
         if cs[i].rank == cs[i + 1].rank {
             match j {
                 None => j = Some(i),
@@ -370,8 +374,8 @@ fn best_hand_aux_pair_2(cs: &[Card, ..7]) -> Option<(Hand, HandSet)> {
         None => return None
     };
     // Kicker's index.
-    let mut p = 0u;
-    for i in range(0u, cs.len()) {
+    let mut p = 0;
+    for i in 0..cs.len() {
         if i == j || i == j + 1 {
             continue;
         }
@@ -388,10 +392,10 @@ fn best_hand_aux_pair_2(cs: &[Card, ..7]) -> Option<(Hand, HandSet)> {
 
 
 // Pre-cond: descendingly sorted cards.
-fn best_hand_aux_pair_1(cards: &[Card, ..7]) -> Option<(Hand, HandSet)> {
+fn best_hand_aux_pair_1(cards: &[Card;7]) -> Option<(Hand, HandSet)> {
     // Find two consecutive similar ranks.
     let mut j = None;
-    for i in range(0u, cards.len() - 1) {
+    for i in 0..(cards.len() - 1) {
         if cards[i].rank == cards[i + 1].rank {
             j = Some(i);
             break;
@@ -403,9 +407,9 @@ fn best_hand_aux_pair_1(cards: &[Card, ..7]) -> Option<(Hand, HandSet)> {
         None => return None
     };
     // Kickers' indices.
-    let mut k = [0u, ..3];
-    let mut m = 0u;
-    for i in range(0u, cards.len()) {
+    let mut k = [0;3];
+    let mut m = 0;
+    for i in 0..cards.len() {
         if i == j || i == j + 1 {
             continue;
         }
@@ -422,15 +426,15 @@ fn best_hand_aux_pair_1(cards: &[Card, ..7]) -> Option<(Hand, HandSet)> {
 
 
 // Pre-cond: descendingly sorted cards.
-fn best_hand_aux_high(cs: &[Card, ..7]) -> (Hand, HandSet) {
+fn best_hand_aux_high(cs: &[Card;7]) -> (Hand, HandSet) {
     (High((cs[0].rank, cs[1].rank, cs[2].rank, cs[3].rank, cs[4].rank)),
      [cs[0], cs[1], cs[2], cs[3], cs[4]])
 }
 
 
 pub fn best_hand(table: &Table, phand: &PHand) -> (Hand, HandSet) {
-    let cards: &[Card, ..7] = &{
-        let mut cards: [Card, ..7] = [
+    let cards: &[Card;7] = &{
+        let mut cards: [Card;7] = [
             table.flop.0,
             table.flop.1,
             table.flop.2,
@@ -454,13 +458,13 @@ pub fn best_hand(table: &Table, phand: &PHand) -> (Hand, HandSet) {
                                     .unwrap_or_else(|| best_hand_aux_high(cards)))))))))
 }
 
-/*
+
 fn main() {
     let (table, phands) = deal();
     let (hand, hand_set) = best_hand(&table, &phands[0]);
-    println!("{}", table);
-    println!("phand: {}", phands[0].as_slice());
-    println!("hand: {}", hand);
-    println!("hand_set:{}", hand_set.as_slice());
+    println!("{:?}", table);
+    println!("phand: {:?}", phands[0].as_slice());
+    println!("hand: {:?}", hand);
+    println!("hand_set:{:?}", hand_set.as_slice());
 }
-*/
+
